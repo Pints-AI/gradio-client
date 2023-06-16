@@ -337,29 +337,49 @@ async function client(app_reference, options = { normalise_files: true }) {
       let status_complete = false;
 
       const needToStream = data[7]
-      const stream = new Readable();
 
       if(needToStream) {
+        const noop = () => null
+
+        // this is to keep the reference to callback that client will attach
+        let onDataHandler = noop
+        let onEndHandler = noop
+
+        const eventSource = {
+            onData: (cb) => {
+              onDataHandler = cb
+            }, 
+            onEnd: (cb) => {
+              onEndHandler = cb
+            }
+        }
+
         return new Promise((res, rej) => {
+          res(eventSource)
+
           const app = submit(endpoint, data, event_data);
+
           app.on("data", (d) => {
             data_returned = true;
+
             if (status_complete) {
               app.destroy();
-              readableStream.push(null);
+              onEndHandler()
+              return
             }
-            res({stream})
+
+            onDataHandler(d) 
           }).on("status", (status) => {
             if (status.stage === "error") {
-              stream.push(null); 
+              onEndHandler()
             }
             if (status.stage === "complete" && data_returned) {
               app.destroy();
-              stream.push(null);
+              onEndHandler()
             }
             if (status.stage === "complete") {
               status_complete = true;
-              stream.push(null);
+              onEndHandler()
             }
           }); 
         })
