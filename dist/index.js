@@ -336,53 +336,13 @@ async function client(app_reference, options = { normalise_files: true }) {
       let data_returned = false;
       let status_complete = false;
 
-      const needToStream = data[7]
+      const streamOutput = data[7]
 
-      if(needToStream) {
-        const noop = () => null
+      if(streamOutput) {
+        const app = submit(endpoint, data, event_data);
 
-        // this is to keep the reference to callback that client will attach
-        let onDataHandler = noop
-        let onEndHandler = noop
-
-        const eventSource = {
-            onData: (cb) => {
-              onDataHandler = cb
-            }, 
-            onEnd: (cb) => {
-              onEndHandler = cb
-            }
-        }
-
-        return new Promise((res, rej) => {
-          res(eventSource)
-
-          const app = submit(endpoint, data, event_data);
-
-          app.on("data", (d) => {
-            data_returned = true;
-
-            if (status_complete) {
-              app.destroy();
-              onEndHandler()
-              return
-            }
-
-            onDataHandler(d) 
-          }).on("status", (status) => {
-            if (status.stage === "error") {
-              onEndHandler()
-            }
-            if (status.stage === "complete" && data_returned) {
-              app.destroy();
-              onEndHandler()
-            }
-            if (status.stage === "complete") {
-              status_complete = true;
-              onEndHandler()
-            }
-          }); 
-        })
+        // if we need to stream, we will return the ref to app and handle the rest in caller
+        return Promise.resolve(app)
       }
 
       return new Promise((res2, rej) => {
