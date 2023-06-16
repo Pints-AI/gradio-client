@@ -335,6 +335,36 @@ async function client(app_reference, options = { normalise_files: true }) {
     function predict(endpoint, data, event_data) {
       let data_returned = false;
       let status_complete = false;
+
+      const needToStream = data[7]
+      const stream = new Readable();
+
+      if(needToStream) {
+        return new Promise((res, rej) => {
+          const app = submit(endpoint, data, event_data);
+          app.on("data", (d) => {
+            data_returned = true;
+            if (status_complete) {
+              app.destroy();
+              readableStream.push(null);
+            }
+            res({stream})
+          }).on("status", (status) => {
+            if (status.stage === "error") {
+              stream.push(null); 
+            }
+            if (status.stage === "complete" && data_returned) {
+              app.destroy();
+              stream.push(null);
+            }
+            if (status.stage === "complete") {
+              status_complete = true;
+              stream.push(null);
+            }
+          }); 
+        })
+      }
+
       return new Promise((res2, rej) => {
         const app = submit(endpoint, data, event_data);
         app.on("data", (d) => {
